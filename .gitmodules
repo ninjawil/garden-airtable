@@ -1,6 +1,6 @@
-[submodule "scritps/toolbox"]
-	path = scritps/toolbox
-	url = https://github.com/ninjawil/toolbox.git
 [submodule "scripts/airtable"]
 	path = scripts/airtable
 	url = https://github.com/nicocanali/airtable-python.git
+[submodule "scripts/toolbox"]
+	path = scripts/toolbox
+	url = https://github.com/ninjawil/toolbox.git
