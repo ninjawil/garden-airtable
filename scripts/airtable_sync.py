@@ -73,9 +73,9 @@ def main():
 
         at_api_key      = config['airtable']['API_KEY']
         at_base_id      = config['airtable']['BASE_ID']
-        at_garden_plants = str(config['airtable']['TABLE_NAME']['GARDEN_PLANTS'])
-        at_varieties    = str(config['airtable']['TABLE_NAME']['VARIETIES'])
-        at_plants       = str(config['airtable']['TABLE_NAME']['PLANTS'])
+        at_garden_plants = config['airtable']['TABLE_NAME']['GARDEN_PLANTS']
+        at_varieties    = config['airtable']['TABLE_NAME']['VARIETIES']
+        at_plants       = config['airtable']['TABLE_NAME']['PLANTS']
 
         
         #-------------------------------------------------------------------
@@ -94,22 +94,28 @@ def main():
 
         at_plants = at.get(at_plants)
         at_plants = [str(p['fields']['Name']) for p in at_plants['records']]
-        print type(at_plants[0])
 
         for key in plants:
-            if '\"' in plants[key]:
+            if ' "' in plants[key]:
                 # Remove # fron the begining of the name and the last quote
                 plant = plants[key][1:-1].split(' "')
 
-                name = str(plant[0])
-                name_common = str(plant[1])
-                
+                try:
+                    name = str(plant[0])
+                    name_common = str(plant[1])
+                except Exception, e:
+                    logger.error('Error with tag {p} ({error_v})'.format(
+                        p=plant, error_v=e), exc_info=True)  
+                    continue
+
                 if name not in at_plants:
+                    i+=1
+                    logger.info('Not in db: "{c}"'.format(n=name, c= name_common))
                     rec = {
                         'Name': name,
                         'Common Name': name_common
                         }
-                    test = at.create(at_plants, rec)
+                   # test = at.create(str(at_plants), rec)
 
     except Exception, e:
         logger.error('Update failed ({error_v}). Exiting...'.format(
