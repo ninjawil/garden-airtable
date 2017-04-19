@@ -81,7 +81,7 @@ def main():
         #------------------------------------------------------------------- 
         at = airtable.Airtable(at_base_id, at_api_key)
 
-        
+ 
         #-------------------------------------------------------------------
         # Sync plant names
         #-------------------------------------------------------------------
@@ -90,58 +90,42 @@ def main():
 
         plants = data['diary']
         names = data['plant_tags']
+        locs = data['location_tags']
         
         at_plants = at.get(at_garden_plants)
-        at_plants = [str(p['fields']['Name']) for p in at_plants['records']]
+        at_plants_id = [str(p['fields']['Plant ID']) for p in at_plants['records']]
 
         year_current = datetime.datetime.now().year
 
         for key in plants:
             ns = plants[key].keys()
             for n in ns:
-                year = unicode(str(year_current), "utf-8")
+                if not plants[key][n]['alive']: continue
 
-                print year
-                print plants[key][n]['timeline'].keys()
+                if key not in at_plants_id:
+                    name = names[key]
+                    
+                    # Remove # fron the begining of the name and the last quote
+                    variety = plants[key][1:-1].split(" '") if " '" in plants[key] else u''
 
-                if year not in plants[key][n]['timeline'].keys():
-                    continue
+                    logger.info('Not in db: {c} - {no}'.format(c=name, no=n))
+                    rec = {
+                        'Name': name[1:],
+                        'Variety': variety,
+                        'Number': float(n),
+                        'Location': locs[plants[key][n]['location']][1:],
+                        'Plant ID': key
+                        }
+                    response = at.create(str(at_garden_plants), rec)
 
-                print n
-
-                week = 52
-                while week >= 0:
-                    if plants[key][n]['timeline'][year][week] is not None:
-                        print names[key]
-                        break
-                    elif week == 0:
-                        week = 52
-                        year = unicode(str(year_current-1), "utf-8")
-                    else:
-                        week -=1
+                    if 'error' in response.keys():
+                        logger.error(response['error']['message'])
+                        sys.exit()
+                    
+                    # Slow loop down not to exceed api rate limit
+                    time.sleep(12)
 
 
-        sys.exit()
-        if ' "' in plants[key]:
-            # Remove # fron the begining of the name and the last quote
-            plant = plants[key][1:-1].split(' "')
-
-            try:
-                name = str(plant[0])
-                name_common = str(plant[1])
-            except Exception, e:
-                logger.error('Error with tag {p} ({error_v})'.format(
-                    p=plant, error_v=e), exc_info=True)  
-                # continue
-
-            if name not in at_plants:
-                i+=1
-                logger.info('Not in db: "{c}"'.format(n=name, c= name_common))
-                rec = {
-                    'Name': name,
-                    'Common Name': name_common
-                    }
-                # test = at.create(str(at_plants), rec)
 
     except Exception, e:
         logger.error('Update failed ({error_v}). Exiting...'.format(
