@@ -74,8 +74,6 @@ def main():
         at_api_key      = config['airtable']['API_KEY']
         at_base_id      = config['airtable']['BASE_ID']
         at_garden_plants = config['airtable']['TABLE_NAME']['GARDEN_PLANTS']
-        at_varieties    = config['airtable']['TABLE_NAME']['VARIETIES']
-        at_plants       = config['airtable']['TABLE_NAME']['PLANTS']
 
         
         #-------------------------------------------------------------------
@@ -87,35 +85,63 @@ def main():
         #-------------------------------------------------------------------
         # Sync plant names
         #-------------------------------------------------------------------
-        with open('{fl}/garden-evernote/data/gardening.json'.format(fl= folder_root), 'r') as f:
+        with open('{fl}/garden-evernote/data/gardening_web.json'.format(fl= folder_root), 'r') as f:
             data = json.load(f)
 
-        plants = data['plant_tags']
-
-        at_plants = at.get(at_plants)
+        plants = data['diary']
+        names = data['plant_tags']
+        
+        at_plants = at.get(at_garden_plants)
         at_plants = [str(p['fields']['Name']) for p in at_plants['records']]
 
-        for key in plants:
-            if ' "' in plants[key]:
-                # Remove # fron the begining of the name and the last quote
-                plant = plants[key][1:-1].split(' "')
+        year_current = datetime.datetime.now().year
 
-                try:
-                    name = str(plant[0])
-                    name_common = str(plant[1])
-                except Exception, e:
-                    logger.error('Error with tag {p} ({error_v})'.format(
-                        p=plant, error_v=e), exc_info=True)  
+        for key in plants:
+            ns = plants[key].keys()
+            for n in ns:
+                year = unicode(str(year_current), "utf-8")
+
+                print year
+                print plants[key][n]['timeline'].keys()
+
+                if year not in plants[key][n]['timeline'].keys():
                     continue
 
-                if name not in at_plants:
-                    i+=1
-                    logger.info('Not in db: "{c}"'.format(n=name, c= name_common))
-                    rec = {
-                        'Name': name,
-                        'Common Name': name_common
-                        }
-                   # test = at.create(str(at_plants), rec)
+                print n
+
+                week = 52
+                while week >= 0:
+                    if plants[key][n]['timeline'][year][week] is not None:
+                        print names[key]
+                        break
+                    elif week == 0:
+                        week = 52
+                        year = unicode(str(year_current-1), "utf-8")
+                    else:
+                        week -=1
+
+
+        sys.exit()
+        if ' "' in plants[key]:
+            # Remove # fron the begining of the name and the last quote
+            plant = plants[key][1:-1].split(' "')
+
+            try:
+                name = str(plant[0])
+                name_common = str(plant[1])
+            except Exception, e:
+                logger.error('Error with tag {p} ({error_v})'.format(
+                    p=plant, error_v=e), exc_info=True)  
+                # continue
+
+            if name not in at_plants:
+                i+=1
+                logger.info('Not in db: "{c}"'.format(n=name, c= name_common))
+                rec = {
+                    'Name': name,
+                    'Common Name': name_common
+                    }
+                # test = at.create(str(at_plants), rec)
 
     except Exception, e:
         logger.error('Update failed ({error_v}). Exiting...'.format(
