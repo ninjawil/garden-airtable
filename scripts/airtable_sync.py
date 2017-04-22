@@ -92,38 +92,83 @@ def main():
         names = data['plant_tags']
         locs = data['location_tags']
         
-        at_plants = at.get(at_garden_plants)
+        logger.info('Downloading data from airtable...')
+        #at_plants = at.get(at_garden_plants)
+        logger.info('DONE.')
+        #with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'w') as f:
+        #    json.dump(at_plants, f)
+        with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'r') as f:
+            at_plants = json.load(f)
+
         at_plants_id = [str(p['fields']['Plant ID']) for p in at_plants['records']]
 
         year_current = datetime.datetime.now().year
 
-        for key in plants:
-            ns = plants[key].keys()
+        for plant_id in plants:
+            ns = plants[plant_id].keys()
             for n in ns:
-                if not plants[key][n]['alive']: continue
+                if not plants[plant_id][n]['alive']: continue
 
-                if key not in at_plants_id:
-                    name = names[key]
-                    
+                if " '" in names[plant_id]:
                     # Remove # fron the begining of the name and the last quote
-                    variety = plants[key][1:-1].split(" '") if " '" in plants[key] else u''
+                    full_name = names[plant_id][1:-1].split(" '")
+                    name = full_name[0]
+                    variety = full_name[1]
+                else:
+                    name = names[plant_id][1:]
+                    variety = u''
 
-                    logger.info('Not in db: {c} - {no}'.format(c=name, no=n))
-                    rec = {
-                        'Name': name[1:],
+                rec = {
+                        'Name': name,
                         'Variety': variety,
                         'Number': float(n),
-                        'Location': locs[plants[key][n]['location']][1:],
-                        'Plant ID': key
-                        }
-                    response = at.create(str(at_garden_plants), rec)
+                        'Location': locs[plants[plant_id][n]['location']][1:],
+                        'Plant ID': plant_id
+                    }
 
-                    if 'error' in response.keys():
-                        logger.error(response['error']['message'])
-                        sys.exit()
-                    
-                    # Slow loop down not to exceed api rate limit
-                    time.sleep(12)
+                response = None
+
+                if plant_id not in at_plants_id:
+                    logger.info('Not in db: {c} - {no}'.format(c=names[plant_id][1:], no=n))
+                    #response = at.create(str(at_garden_plants), rec)
+
+                elif plant_id in at_plants_id:
+                    for p in at_plants['records']:
+                        if str(p['fields']['Plant ID']) == plant_id and p['fields']['Number'] == float(n):
+                            update = False
+                            if 'Name' not in p['fields'].keys(): 
+                                print 'name not there'
+                                update = True
+                            elif 'Variety' not in p['fields'].keys() and rec['Variety'] is not u'': 
+                                print 'variety not there'
+                                update = True
+                            elif 'Location' not in p['fields'].keys(): 
+                                print 'location not there'
+                                update = True
+                            elif str(p['fields']['Name']) is not rec['Name']: 
+                                print 'name not same'
+                                update = True
+                            elif str(p['fields']['Variety']) is not rec['Variety']: 
+                                print 'variety not same'
+                                update = True
+                            elif str(p['fields']['Location']) is not rec['Location']: 
+                                print 'location not same'
+                                update = True
+
+                            if update:
+                                #response = at.update(str(at_garden_plants), str(p['id']), rec)
+                                logger.info('Updated: {c} - {no}'.format(c=names[plant_id][1:], no=n))
+                                
+                            break
+
+
+
+                # if 'error' in response.keys():
+                    # logger.error(response['error']['message'])
+                    # sys.exit()
+                
+                ## Slow loop down not to exceed api rate limit
+                # time.sleep(12)
 
 
 
