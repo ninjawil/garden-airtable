@@ -93,12 +93,12 @@ def main():
         locs = data['location_tags']
         
         logger.info('Downloading data from airtable...')
-        #at_plants = at.get(at_garden_plants)
+        at_plants = at.get(at_garden_plants)
         logger.info('DONE.')
-        #with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'w') as f:
-        #    json.dump(at_plants, f)
-        with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'r') as f:
-            at_plants = json.load(f)
+        with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'w') as f:
+           json.dump(at_plants, f)
+        # with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'r') as f:
+        #     at_plants = json.load(f)
 
         at_plants_id = [str(p['fields']['Plant ID']) for p in at_plants['records']]
 
@@ -109,40 +109,34 @@ def main():
             for n in ns:
                 if not plants[plant_id][n]['alive']: continue
 
+                rec = {
+                        'Number': float(n),
+                        'Location': locs[plants[plant_id][n]['location']][1:],
+                        'Plant ID': plant_id
+                    }
+
                 if " '" in names[plant_id]:
                     # Remove # fron the begining of the name and the last quote
                     full_name = names[plant_id][1:-1].split(" '")
-                    rec = {
-                            'Name': full_name[0],
-                            'Variety': full_name[1],
-                            'Number': float(n),
-                            'Location': locs[plants[plant_id][n]['location']][1:],
-                            'Plant ID': plant_id
-                        }
+                    rec['Name'] = full_name[0]
+                    rec['Variety'] = full_name[1]
                 else:
-                    rec = {
-                            'Name': names[plant_id][1:],
-                            'Number': float(n),
-                            'Location': locs[plants[plant_id][n]['location']][1:],
-                            'Plant ID': plant_id
-                        }
+                    rec['Name'] = names[plant_id][1:]
 
-
-                response = None
+                response = {}
 
                 if plant_id not in at_plants_id:
-                    a=1
-                    #logger.info('Not in db: {c} - {no}'.format(c=names[plant_id][1:], no=n))
-                    #response = at.create(str(at_garden_plants), rec)
+                    logger.info('Not in db: {c} - {no}'.format(c=names[plant_id][1:], no=n))
+                    response = at.create(str(at_garden_plants), rec)
 
                 elif plant_id in at_plants_id:
                     for p in at_plants['records']:
                         if str(p['fields']['Plant ID']) == plant_id and p['fields']['Number'] == float(n):
-                            update = False
                             rk = rec.keys()
                             rk.remove('Number')
                             pk = p['fields'].keys()
 
+                            update = False
                             # Check if all items are present
                             if any([True for k in rk if k not in pk]):
                                 update = True
@@ -152,21 +146,16 @@ def main():
                                 update = True
 
                             if update:
-                                #response = at.update(str(at_garden_plants), str(p['id']), rec)
+                                response = at.update(str(at_garden_plants), str(p['id']), rec)
                                 logger.info('Updated: {c} - {no}'.format(c=names[plant_id][1:], no=n))
-                                
-                            break
+                                break
 
-
-
-                # if 'error' in response.keys():
-                    # logger.error(response['error']['message'])
-                    # sys.exit()
+                if 'error' in response.keys():
+                    logger.error(response['error']['message'])
+                    sys.exit()
                 
-                ## Slow loop down not to exceed api rate limit
-                # time.sleep(12)
-
-
+                # Slow loop down not to exceed api rate limit
+                time.sleep(12)
 
     except Exception, e:
         logger.error('Update failed ({error_v}). Exiting...'.format(
