@@ -88,7 +88,7 @@ def main():
         with open('{fl}/garden-evernote/data/gardening_web.json'.format(fl= folder_root), 'r') as f:
             data = json.load(f)
 
-        plants = data['diary']
+        garden_plants = data['diary']
         names = data['plant_tags']
         locs = data['location_tags']
         
@@ -100,18 +100,22 @@ def main():
         # with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'r') as f:
         #     at_plants = json.load(f)
 
-        at_plants_id = [str(p['fields']['Plant ID']) for p in at_plants['records']]
+        at_plants_id = [str(p['fields']['Plant ID']) for p in at_plants['records'] if 'Plant ID' in p['fields'].keys()]
 
         year_current = datetime.datetime.now().year
 
-        for plant_id in plants:
-            ns = plants[plant_id].keys()
+        for plant_id in garden_plants:
+
+            # Compile dict of plant records already in airtable
+            at_ns = [float(p['fields']['Number']) for p in at_plants['records'] if str(p['fields']['Plant ID']) == plant_id]
+
+            ns = garden_plants[plant_id].keys()
             for n in ns:
-                if not plants[plant_id][n]['alive']: continue
+                if not garden_plants[plant_id][n]['alive']: continue
 
                 rec = {
                         'Number': float(n),
-                        'Location': locs[plants[plant_id][n]['location']][1:],
+                        'Location': locs[garden_plants[plant_id][n]['location']][1:],
                         'Plant ID': plant_id
                     }
 
@@ -125,13 +129,15 @@ def main():
 
                 response = {}
 
-                if plant_id not in at_plants_id:
+                if plant_id not in at_plants_id or (plant_id in at_plants_id and float(n) not in at_ns):
                     logger.info('Not in db: {c} - {no}'.format(c=names[plant_id][1:], no=n))
                     response = at.create(str(at_garden_plants), rec)
 
                 elif plant_id in at_plants_id:
                     for p in at_plants['records']:
-                        if str(p['fields']['Plant ID']) == plant_id and p['fields']['Number'] == float(n):
+                        if str(p['fields']['Plant ID']) != plant_id: continue
+
+                        elif p['fields']['Number'] == float(n):
                             rk = rec.keys()
                             rk.remove('Number')
                             pk = p['fields'].keys()
@@ -148,7 +154,7 @@ def main():
                             if update:
                                 logger.info('Updating: {c} - {no}'.format(c=names[plant_id][1:], no=n))
                                 response = at.update(str(at_garden_plants), str(p['id']), rec)
-                                break
+                                continue
 
                 if 'error' in response.keys():
                     logger.error(response['error']['message'])
