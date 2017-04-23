@@ -112,47 +112,43 @@ def main():
                 if " '" in names[plant_id]:
                     # Remove # fron the begining of the name and the last quote
                     full_name = names[plant_id][1:-1].split(" '")
-                    name = full_name[0]
-                    variety = full_name[1]
+                    rec = {
+                            'Name': full_name[0],
+                            'Variety': full_name[1],
+                            'Number': float(n),
+                            'Location': locs[plants[plant_id][n]['location']][1:],
+                            'Plant ID': plant_id
+                        }
                 else:
-                    name = names[plant_id][1:]
-                    variety = u''
+                    rec = {
+                            'Name': names[plant_id][1:],
+                            'Number': float(n),
+                            'Location': locs[plants[plant_id][n]['location']][1:],
+                            'Plant ID': plant_id
+                        }
 
-                rec = {
-                        'Name': name,
-                        'Variety': variety,
-                        'Number': float(n),
-                        'Location': locs[plants[plant_id][n]['location']][1:],
-                        'Plant ID': plant_id
-                    }
 
                 response = None
 
                 if plant_id not in at_plants_id:
-                    logger.info('Not in db: {c} - {no}'.format(c=names[plant_id][1:], no=n))
+                    a=1
+                    #logger.info('Not in db: {c} - {no}'.format(c=names[plant_id][1:], no=n))
                     #response = at.create(str(at_garden_plants), rec)
 
                 elif plant_id in at_plants_id:
                     for p in at_plants['records']:
                         if str(p['fields']['Plant ID']) == plant_id and p['fields']['Number'] == float(n):
                             update = False
-                            if 'Name' not in p['fields'].keys(): 
-                                print 'name not there'
+                            rk = rec.keys()
+                            rk.remove('Number')
+                            pk = p['fields'].keys()
+
+                            # Check if all items are present
+                            if any([True for k in rk if k not in pk]):
                                 update = True
-                            elif 'Variety' not in p['fields'].keys() and rec['Variety'] is not u'': 
-                                print 'variety not there'
-                                update = True
-                            elif 'Location' not in p['fields'].keys(): 
-                                print 'location not there'
-                                update = True
-                            elif str(p['fields']['Name']) is not rec['Name']: 
-                                print 'name not same'
-                                update = True
-                            elif str(p['fields']['Variety']) is not rec['Variety']: 
-                                print 'variety not same'
-                                update = True
-                            elif str(p['fields']['Location']) is not rec['Location']: 
-                                print 'location not same'
+                            
+                            # Check if all item values are the same
+                            elif any([True for k in rk if str(rec[k]) != str(p['fields'][k])]):
                                 update = True
 
                             if update:
