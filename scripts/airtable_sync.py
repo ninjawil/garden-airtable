@@ -146,16 +146,18 @@ def main():
                                 update = True
 
                             if update:
+                                logger.info('Updating: {c} - {no}'.format(c=names[plant_id][1:], no=n))
                                 response = at.update(str(at_garden_plants), str(p['id']), rec)
-                                logger.info('Updated: {c} - {no}'.format(c=names[plant_id][1:], no=n))
                                 break
 
                 if 'error' in response.keys():
                     logger.error(response['error']['message'])
+                    logger.error(rec)
                     sys.exit()
-                
-                # Slow loop down not to exceed api rate limit
-                time.sleep(12)
+
+                elif response:
+                    # Slow loop down not to exceed api rate limit
+                    time.sleep(12)
 
     except Exception, e:
         logger.error('Update failed ({error_v}). Exiting...'.format(
