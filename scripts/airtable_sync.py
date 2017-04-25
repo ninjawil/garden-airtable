@@ -20,6 +20,14 @@ import logging
 import toolbox.check_process as check_process
 
 
+#---------------------------------------------------------------------------
+# Nested dictionaries
+#---------------------------------------------------------------------------
+def nested_dict():
+    return collections.defaultdict(nested_dict)
+
+
+
 #===============================================================================
 # MAIN
 #===============================================================================
@@ -83,7 +91,7 @@ def main():
 
  
         #-------------------------------------------------------------------
-        # Sync plant names
+        # Get garden data from file
         #-------------------------------------------------------------------
         with open('{fl}/garden-evernote/data/gardening_web.json'.format(fl= folder_root), 'r') as f:
             data = json.load(f)
@@ -92,79 +100,114 @@ def main():
         names = data['plant_tags']
         locs = data['location_tags']
         
+
+        #-------------------------------------------------------------------
+        # Download airtable data
+        #-------------------------------------------------------------------
         logger.info('Downloading data from airtable...')
-        at_plants = at.get(at_garden_plants)
-        logger.info('DONE.')
+        at_plants = nested_dict()
+        recs_to_delete = []
+        
+        offset = None
+        i=0
+        while True:
+            response = at.get(at_garden_plants, offset=offset)
+            for record in response.pop('records'):
+                keys = record['fields'].keys()
+
+                if 'Plant ID' not in keys: 
+                    recs_to_delete.append(record['id'])
+                    continue
+
+                p_id = str(record['fields']['Plant ID'])
+                p_n = unicode(float(record['fields']['Number']))
+
+                at_plants[p_id][p_n] = {
+                    'Location': record['fields']['Location'],
+                    'Name': record['fields']['Name'],
+                    'Id': record['id']
+                }
+
+                if 'Variety' in keys:
+                    at_plants[p_id][p_n]['Variety'] = record['fields']['Variety']
+
+                i+=1
+
+            if 'offset' in response:
+                logger.info('Still downloading...')
+                offset = str(response['offset'])
+            else:
+                break
+
+        logger.info('DONE. {n} records downloaded.'.format(n=i))
+
         with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'w') as f:
            json.dump(at_plants, f)
-        # with open('{fl}/data/tabledata.json'.format(fl= folder_loc), 'r') as f:
-        #     at_plants = json.load(f)
 
-        at_plants_id = [str(p['fields']['Plant ID']) for p in at_plants['records'] if 'Plant ID' in p['fields'].keys()]
+        
+        #-------------------------------------------------------------------
+        # Remove records in airtable and not in garden
+        #-------------------------------------------------------------------
+        id_to_remove = set(at_plants.keys()) - set(garden_plants.keys()) 
+        recs_to_delete = recs_to_delete + [at_plants[plant_id][n]['Id'] for plant_id in id_to_remove for n in at_plants[plant_id].keys()]
+            
+        for rec in recs_to_delete:    
+            logger.info('Removing: {c}'.format(c=rec))
+            response = at.delete(str(at_garden_plants), str(rec))
+            if 'error' in response.keys(): raise Exception(response['error']['message'])
+            
 
-        year_current = datetime.datetime.now().year
-
+        #-------------------------------------------------------------------
+        # Sync garden data with airtable data
+        #-------------------------------------------------------------------
         for plant_id in garden_plants:
 
-            # Compile dict of plant records already in airtable
-            at_ns = [float(p['fields']['Number']) for p in at_plants['records'] if str(p['fields']['Plant ID']) == plant_id]
+            rec = {'Plant ID': plant_id}
 
-            ns = garden_plants[plant_id].keys()
-            for n in ns:
-                if not garden_plants[plant_id][n]['alive']: continue
+            if " '" in names[plant_id]:
+                # Remove # fron the begining of the name and the last quote
+                full_name = names[plant_id][1:-1].split(" '")
+                rec['Name'] = full_name[0]
+                rec['Variety'] = full_name[1]
+            else:
+                rec['Name'] = names[plant_id][1:]
 
-                rec = {
-                        'Number': float(n),
-                        'Location': locs[garden_plants[plant_id][n]['location']][1:],
-                        'Plant ID': plant_id
-                    }
+            ns = set([n for n in garden_plants[plant_id].keys() if garden_plants[plant_id][n]['alive']])
+            at_ns = set(at_plants[plant_id].keys())
+            all_plant_numbers = ns | at_ns
 
-                if " '" in names[plant_id]:
-                    # Remove # fron the begining of the name and the last quote
-                    full_name = names[plant_id][1:-1].split(" '")
-                    rec['Name'] = full_name[0]
-                    rec['Variety'] = full_name[1]
-                else:
-                    rec['Name'] = names[plant_id][1:]
-
+            for n in all_plant_numbers:
                 response = {}
 
-                if plant_id not in at_plants_id or (plant_id in at_plants_id and float(n) not in at_ns):
+                # Remove extra plants
+                if n not in ns:
+                    logger.info('Removing: {c} - {no}'.format(c=names[plant_id][1:], no=n))
+                    response = at.delete(str(at_garden_plants), str(at_plants[plant_id][n]['Id']))
+                    continue
+
+                rec['Location'] = locs[garden_plants[plant_id][n]['location']][1:]
+                rec['Number'] = float(n)
+
+                # Add missing plants
+                if n not in at_ns:
                     logger.info('Not in db: {c} - {no}'.format(c=names[plant_id][1:], no=n))
                     response = at.create(str(at_garden_plants), rec)
+                    continue
 
-                elif plant_id in at_plants_id:
-                    for p in at_plants['records']:
-                        if str(p['fields']['Plant ID']) != plant_id: continue
-
-                        elif p['fields']['Number'] == float(n):
-                            rk = rec.keys()
-                            rk.remove('Number')
-                            pk = p['fields'].keys()
-
-                            update = False
-                            # Check if all items are present
-                            if any([True for k in rk if k not in pk]):
-                                update = True
-                            
-                            # Check if all item values are the same
-                            elif any([True for k in rk if str(rec[k]) != str(p['fields'][k])]):
-                                update = True
-
-                            if update:
-                                logger.info('Updating: {c} - {no}'.format(c=names[plant_id][1:], no=n))
-                                response = at.update(str(at_garden_plants), str(p['id']), rec)
-                                continue
+                # Check for incorrect values
+                rk = at_plants[plant_id][n].keys()
+                rk.remove('Id')
+                if any([True for k in rk if rec[k] != at_plants[plant_id][n][k]]):
+                    logger.info('Updating: {c} - {no}'.format(c=names[plant_id][1:], no=n))
+                    response = at.update_all(str(at_garden_plants), str(at_plants[plant_id][n]['Id']), rec)
 
                 if 'error' in response.keys():
-                    logger.error(response['error']['message'])
-                    logger.error(rec)
-                    sys.exit()
+                    raise Exception(response['error']['message'])
 
+                # Slow loop down not to exceed api rate limit
                 elif response:
-                    # Slow loop down not to exceed api rate limit
                     time.sleep(12)
-
+            
     except Exception, e:
         logger.error('Update failed ({error_v}). Exiting...'.format(
             error_v=e), exc_info=True)
