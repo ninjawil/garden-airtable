@@ -128,6 +128,12 @@ def main():
                     'Id': record['id']
                 }
 
+                if 'Alive' in keys:
+                    at_plants[p_id][p_n]['Alive'] = record['fields']['Alive']
+                else:
+                    at_plants[p_id][p_n]['Alive'] = False
+                    
+
                 if 'Variety' in keys:
                     at_plants[p_id][p_n]['Variety'] = record['fields']['Variety']
 
@@ -172,7 +178,7 @@ def main():
             else:
                 rec['Name'] = names[plant_id][1:]
 
-            ns = set([n for n in garden_plants[plant_id].keys() if garden_plants[plant_id][n]['alive']])
+            ns = set([n for n in garden_plants[plant_id].keys()])
             at_ns = set(at_plants[plant_id].keys())
             all_plant_numbers = ns | at_ns
 
@@ -187,6 +193,7 @@ def main():
 
                 rec['Location'] = locs[garden_plants[plant_id][n]['location']][1:]
                 rec['Number'] = float(n)
+                rec['Alive'] = garden_plants[plant_id][n]['alive']
 
                 # Add missing plants
                 if n not in at_ns:
@@ -199,7 +206,7 @@ def main():
                 rk.remove('Id')
                 if any([True for k in rk if rec[k] != at_plants[plant_id][n][k]]):
                     logger.info('Updating: {c} - {no}'.format(c=names[plant_id][1:], no=n))
-                    response = at.update_all(str(at_garden_plants), str(at_plants[plant_id][n]['Id']), rec)
+                    response = at.update(str(at_garden_plants), str(at_plants[plant_id][n]['Id']), rec)
 
                 if 'error' in response.keys():
                     raise Exception(response['error']['message'])
